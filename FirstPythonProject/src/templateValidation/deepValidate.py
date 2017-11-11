@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from fixSubjectType import addMissingSubjectType
 
 class SaaSTemplate:
     def __init__(self, dictionary):
@@ -41,12 +42,6 @@ def validate(templateObj):
     """
     isSubstitutionValid = validateSubstitution(templateObj)
     isSubjectTypeValid = validateSubjectType(templateObj)
-    
-    if not isSubstitutionValid:
-        print('\t ** Error in Substitution')
-    
-    if not isSubjectTypeValid:  
-        print('\t ** Error Missing subjectType')
         
     return (int) (not isSubstitutionValid or not isSubjectTypeValid)    
     
@@ -70,7 +65,7 @@ def validateSubstitution(tempObj):
             varName = varObj.name
             spConn = tempObj.spConnector
             ssoConf = tempObj.ssoConfig
-            subsCount = getSubsCount(spConn, varName) + getSubsCount(ssoConf, varName)
+            subsCount = getSubstitutionCount(spConn, varName) + getSubstitutionCount(ssoConf, varName)
             targetPropsCount = 0
             
             if hasattr(varObj, 'type') and (varObj.type == 'inputText' or varObj.type == 'inputtext'):
@@ -90,7 +85,7 @@ def validateSubstitution(tempObj):
                     print("\t ** Error in %s Template - Missing TargetProperties Section" % (tempObj.templateName))
                     return False    
             else:
-                print("\t ** Skipping %s Template since variable type is NOT inputText" % (tempObj.templateName))    
+                print("\t Skipping substitutionValidation for %s Template since variable type is NOT inputText" % (tempObj.templateName))    
                 return True
             
     return True
@@ -131,7 +126,7 @@ def extractKeyWithIndex(keyString):
     return None
 
 
-def getSubsCount(obj, variableName):
+def getSubstitutionCount(obj, variableName):
     """
     This function counts the number of occurrences of a variable in the template object
     :param templateObj, variableName
@@ -148,7 +143,7 @@ def getSubsCount(obj, variableName):
                     subsCount += 1
             elif type(v) == list:
                 for subObj in v:
-                    subsCount += getSubsCount(subObj, variableName)
+                    subsCount += getSubstitutionCount(subObj, variableName)
         
         return subsCount              
     else:
@@ -166,16 +161,39 @@ def validateSubjectType(templateObj):
     :param templateObj
     :return: none
     """
+    ssoConf = templateObj.ssoConfig
+    if hasattr(ssoConf, 'subjectValue'):
+        if hasattr(ssoConf, 'subjectType'):
+            if (templateObj.ssoConfig.subjectType == 'email-address') and not isSubjectValueIsMail(ssoConf):
+                print('\t ** Error in %s Template - Incorrect subjectType %s for subjectValue %s' % (templateObj.templateName, ssoConf.subjectType, ssoConf.subjectValue))
+                return False
+        else:
+            print('\t ** Error in %s Template - Missing mandatory subjectType field' % (templateObj.templateName))
+            return False
+        
+    else:
+        print('\t ** Error in %s Template - Missing mandatory subjectValue field' % (templateObj.templateName))
+        return False
+           
     return True
+
+
+def isSubjectValueIsMail(ssoConfig):
+    valueArr = ['%{session.ad.last.attr.mail}', '%{session.ldap.last.attr.mail}', '%{session.radius.last.attr.mail}']
+    for value in valueArr:
+        if ssoConfig.subjectValue == value:
+            return True
+    return False
 
     
 def main():
     """
     Main function
-    :param templates fileName
+    :param templates fileNameYes...
     :return: none
     """
-    fileName = "saas-templates.json"
-    readAndValidateTemplates(fileName)
+    fileName = "saas-templates2.json"
+#     readAndValidateTemplates(fileName)
+    addMissingSubjectType('arcgis')
     
 main()     
